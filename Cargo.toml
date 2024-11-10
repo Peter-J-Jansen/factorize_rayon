@@ -2,6 +2,9 @@
 name = "factorize_rayon"
 version = "0.1.0"
 edition = "2021"
+description = "Rayon find_map_any() demonstration program"
+license = "CC0-1.0"
+repository = "https://github.com/Peter-J-Jansen/factorize_rayon"
 
 [dependencies]
 rayon = "1.10.0"
