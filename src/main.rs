@@ -16,6 +16,7 @@
 //! P.S.: The `factorize_iterative()` function of mine was an experiment to try out *find_map_any()*
 //! with something not immediately trivial, but is of course not meant for production use.  Better and 
 //! fast algorithms exist, also in crates.io.  
+use std::mem::size_of_val ;
 use std::time::Instant ;
 use rayon::prelude::*;
 type Un = u128 ;
