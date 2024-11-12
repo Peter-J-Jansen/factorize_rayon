@@ -94,7 +94,7 @@ fn factorize_iterative(n: Un, p_0: Un, q_0: Un) -> Option<(Un, Un)> {
             while try_count[k] > 1  {
                 try_count[k] = 0 ;
                 k -= 1 ;
-                if k == 7 && p_0 > 1 && q_0 > 1 {
+                if k == 7 && (p_0 > 1 || q_0 > 1) {
 //                  println!("factorize_iterative starting from ({},{}) unsuccessful", p_0, q_0) ; 
                     return None ;
                 }
