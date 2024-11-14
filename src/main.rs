@@ -5,20 +5,13 @@
 //! This small program shows how effective and simple Rust's *Rayon* crate **find_map_any()** can
 //! be used to utilize all CPU cores. 
 //! 
-//! However, it also shows that **find_map_any()** still has a bug in that it can get in a loop 
-//! such that a thread closure correctly ending with a *not-None* option can at times *never end*.
-//! This behavior has been observed to occur not always.  In certain cases it almost never occurs
-//! (e.g for `test[1]`), in other cases sometimes (like for `test[2]`), and in even other cases
-//! it happens every time (see `test[2]`).
-//! 
-//! Hopefully the Rayon support team can fix this bug.
-//! 
 //! P.S.: The `factorize_iterative()` function of mine was an experiment to try out *find_map_any()*
 //! with something not immediately trivial, but is of course not meant for production use.  Better and 
 //! fast algorithms exist, also in crates.io.  
 use std::mem::size_of_val ;
 use std::time::Instant ;
-use rayon::prelude::*;
+use rayon::prelude::* ;
+use std::sync::atomic::{AtomicBool, Ordering} ;
 type Un = u128 ;
 fn main() {
     struct Test {
@@ -36,21 +29,24 @@ fn main() {
     for test in &tests {
         let p_q = possible_factor_lsb_pairs((&test).n) ;
 
+        let found = AtomicBool::new(false) ;
         let mut now = Instant::now() ;
-        let mut factors = factorize_iterative((&test).n, 1, 1).unwrap() ;
+        let mut factors = factorize_iterative((&test).n, 1, 1, &found).unwrap() ;
         println!("factorize_iterative( {0}, ...) yields {1} * {2}; took {3} msec, using a single thread." ,
             (&test).n, factors.0, factors.1, now.elapsed().as_millis()) ;
 
+        found.store(false, Ordering::Relaxed) ;
         now = Instant::now() ;
-        factors = factorize_iterative((&test).n, (&test).p_0, (&test).q_0).unwrap() ;
+        factors = factorize_iterative((&test).n, (&test).p_0, (&test).q_0, &found).unwrap() ;
         println!("factorize_iterative( {0}, ...) yields {1} * {2}; took {3} msec, using a single thread when starting with the correct p q LSB pair." ,
         (&test).n, factors.0, factors.1, now.elapsed().as_millis()) ;
 
+        found.store(false, Ordering::Relaxed) ;
         now = Instant::now() ;
         factors = (0..p_q.len())
         .into_par_iter()
         .find_map_any(|p_q_index| {
-            factorize_iterative((&test).n, (p_q[p_q_index]).0.into(), (p_q[p_q_index]).1.into())
+            factorize_iterative((&test).n, (p_q[p_q_index]).0.into(), (p_q[p_q_index]).1.into(), &found)
         })
         .unwrap() ; 
         println!("factorize_iterative( {0}, ...) yields {1} * {2}; took {3} msec, using a Rayon thread per core." ,
@@ -72,7 +68,7 @@ fn possible_factor_lsb_pairs(n: Un) -> Vec<(u8, u8)> {
 }
 
 #[allow(unused_variables)]
-fn factorize_iterative(n: Un, p_0: Un, q_0: Un) -> Option<(Un, Un)> {
+fn factorize_iterative(n: Un, p_0: Un, q_0: Un, found: &AtomicBool) -> Option<(Un, Un)> {
     let n_msb = size_of_val(&n) * 8 - n.leading_zeros() as usize ;
     let mut try_count: [u8; 128] = [0; 128] ;
     let try_pq_1x_first: Vec<bool> = (0..128).map(|x| x % 2 == 1).collect() ;
@@ -88,6 +84,10 @@ fn factorize_iterative(n: Un, p_0: Un, q_0: Un) -> Option<(Un, Un)> {
         k = 8 ;
     }
     while (n != pq[k - 1]) || (p[k - 1] == 1) || (q[k - 1] == 1) {
+//      if i % 65536 == 0 && found.load(Ordering::Relaxed) {
+        if found.load(Ordering::Relaxed) {            
+            return None;
+        }    
         if n < pq[k - 1] || k > n_msb {
             try_count[k] = 0 ;
             k -= 1 ;
@@ -134,6 +134,7 @@ fn factorize_iterative(n: Un, p_0: Un, q_0: Un) -> Option<(Un, Un)> {
 //  print_npq("    done", n, pq[k - 1], p[k - 1], q[k - 1], k, try_count[k], i) ;
 
     assert!(n == p[k - 1] * q[k - 1]) ;
+    found.store(true, Ordering::Relaxed) ;
     Some((p[k - 1], q[k - 1]))
 }
 
